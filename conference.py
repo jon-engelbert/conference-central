@@ -103,6 +103,11 @@ SESS_CONF_GET_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
+SESS_WISH = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeSessionKey=messages.StringField(1),
+)
+
 SESS_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
     websafeConferenceKey=messages.StringField(1),
@@ -288,6 +293,9 @@ class ConferenceApi(remote.Service):
         # copy ConferenceForm/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
         print("data: {}", repr(data))
+
+        del data['websafeKey']
+
         conf_name = data['conferenceName']
         print("conf_name: {}", conf_name)
 
@@ -337,18 +345,18 @@ class ConferenceApi(remote.Service):
 
     def _copySessionToForm(self, sess):
         """Copy relevant fields from Session to SessionForm."""
-        cf = SessionForm()
-        for field in cf.all_fields():
+        sf = SessionForm()
+        for field in sf.all_fields():
             if hasattr(sess, field.name):
                 # convert Date to date string; just copy others
                 if field.name.endswith('Date'):
-                    setattr(cf, field.name, str(getattr(sess, field.name)))
+                    setattr(sf, field.name, str(getattr(sess, field.name)))
                 else:
-                    setattr(cf, field.name, getattr(sess, field.name))
+                    setattr(sf, field.name, getattr(sess, field.name))
             elif field.name == "websafeKey":
-                setattr(cf, field.name, sess.key.urlsafe())
-        cf.check_initialized()
-        return cf
+                setattr(sf, field.name, sess.key.urlsafe())
+        sf.check_initialized()
+        return sf
 
     def _getQuery(self, request):
         """Return formatted query from the submitted filters."""
@@ -533,14 +541,15 @@ class ConferenceApi(remote.Service):
         print("request.websafeConferenceKey: {}", repr(request.websafeConferenceKey))
         # conf_name = request.websafeConferenceKey
         # print("conf_name: {}", conf_name)
-        q = Conference.query()
-        q= q.filter(Conference.name == request.websafeConferenceKey)
-        conf = q.get()
+        # q = Conference.query()
+        # q= q.filter(Conference.name == request.websafeConferenceKey)
+        # conf = q.get()
 
-        # conf_key = ndb.Key(Conference, request.websafeConferenceKey)
-        # conf = conf_key.get()
+        conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
+        conf = conf_key.get()
+        print("conf: {}", repr(conf))
         if not conf:                                                                                                                                                               raise endpoints.NotFoundException(
-                'No conference found with key: %s' % request.websafeConferenceKey)
+            'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=conf.key)
         # sessions = Session.query(ancestor=ndb.Key(urlsafe=request.websafeConferenceKey))
         session = sessions.get()
@@ -572,12 +581,12 @@ class ConferenceApi(remote.Service):
         # return sessions
 
 
-        q = Conference.query()
-        q= q.filter(Conference.name == request.websafeConferenceKey)
-        conf = q.get()
+        # q = Conference.query()
+        # q= q.filter(Conference.name == request.websafeConferenceKey)
+        # conf = q.get()
 
-        # conf_key = ndb.Key(Conference, request.websafeConferenceKey)
-        # conf = conf_key.get()
+        conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
+        conf = conf_key.get()
         if not conf:                                                                                                                                                               raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=conf.key).filter(Session.typeOfSession == request.type)
@@ -679,7 +688,9 @@ class ConferenceApi(remote.Service):
         # ndb.Key(urlsafe=my_websafe_key_string)
         keys_to_attend = []
         for rawKey in prof.conferenceKeysToAttend:
-            keys_to_attend.append(ndb.Key(urlsafe = rawKey))
+            key = ndb.Key(urlsafe=rawKey)
+            print("rawKey: {}", rawKey)
+            keys_to_attend.append(key)
         # step 3: fetch conferences from datastore. 
         # for ndbKey in keys_to_attend:
         #     conf = ndbKey.get()
@@ -704,6 +715,94 @@ class ConferenceApi(remote.Service):
         prof = conf.key.parent().get()
         # return ConferenceForm
         return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+
+# - - - Session wishlists - - - - - - - - - - - - - - - - - -
+    def _sessionWishlist(self, request, add=True):
+        """Add or remove session to/from user's wishlist."""
+        retval = None
+        prof = self._getProfileFromUser() # get user Profile
+
+        # check if conf exists given websafeConfKey
+        # get conference; check that it exists
+        wssk = request.websafeSessionKey
+        sess = ndb.Key(urlsafe=wssk).get()
+        if not sess:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % wsck)
+
+        # add
+        if add:
+            # check if user already wishing for this session otherwise add
+            if wssk in prof.sessionKeysWishList:
+                raise ConflictException(
+                    "You are already interested in this session")
+
+            # register user, take away one seat
+            prof.sessionKeysWishList.append(wssk)
+            retval = True
+
+        # unregister
+        else:
+            # check if user already registered
+            if wssk in prof.sessionKeysWishList:
+
+                # unregister user, add back one seat
+                prof.sessionKeysWishList.remove(wssk)
+                retval = True
+            else:
+                retval = False
+
+        # write things back to the datastore & return
+        prof.put()
+        return BooleanMessage(data=retval)
+
+    @endpoints.method(SESS_WISH, BooleanMessage,
+            path='session/addwish',
+            http_method='POST', name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """Add session to user's wishlist. It doesn't matter if the user is scheduled to attend the session's conference."""
+        return self._sessionWishlist(request)
+
+    @endpoints.method(SESS_WISH, BooleanMessage,
+            path='session/removewish',
+            http_method='POST', name='removeSessionFromWishlist')
+    def removeSessionFromWishlist(self, request):
+        """Remove session from user's wishlist."""
+        return self._sessionWishlist(request, False)
+
+    @endpoints.method(SESS_CONF_GET_REQUEST, SessionForms,
+            path='sessions/wishlist',
+            http_method='GET', name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """Get list of sessions for a specific conference that user wishes to attend."""
+        # TODO:
+        # step 1: get user profile
+        prof = self._getProfileFromUser() # get user Profile
+        # step 2: get conferenceKeysToAttend from profile.
+        # to make a ndb key from websafe key you can use:
+        # ndb.Key(urlsafe=my_websafe_key_string)
+        keys_to_attend = []
+        for rawKey in prof.sessionKeysWishList:
+            key = ndb.Key(urlsafe=rawKey)
+            print("rawKey: {}", rawKey)
+            keys_to_attend.append(key)
+        # step 3: fetch conferences from datastore. 
+        # for ndbKey in keys_to_attend:
+        #     conf = ndbKey.get()
+        # Use get_multi(array_of_keys) to fetch all keys at once.
+        # Do not fetch them one by one!
+        sessions = ndb.get_multi(keys_to_attend)
+        conf_sessions = []
+        conf_key = ndb.Key(Conference, request.websafeConferenceKey)
+        for session in sessions:
+            if session.key == conf_key:
+                conf_sessions.add(session) 
+
+        # return set of ConferenceForm objects per Conference
+        return SessionForms(items=[self._copySessionToForm(sess, "")\
+            for sess in conf_sessions]
+        )
+
 
 # - - - Announcements - - - - - - - - - - - - - - - - - - - -
 

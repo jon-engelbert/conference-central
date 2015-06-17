@@ -67,6 +67,7 @@ class Profile(ndb.Model):
     mainEmail = ndb.StringProperty()
     teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
     conferenceKeysToAttend = ndb.StringProperty(repeated=True)
+    sessionKeysWishList = ndb.StringProperty(repeated=True)
 
 # needed for conference registration
 class BooleanMessage(messages.Message):
@@ -94,6 +95,7 @@ class ProfileForm(messages.Message):
     mainEmail = messages.StringField(2)
     teeShirtSize = messages.EnumField('TeeShirtSize', 3)
     conferenceKeysToAttend = messages.StringField(4, repeated=True)
+    sessionKeysWishList = messages.StringField(5, repeated=True)
 
 class Session(ndb.Model):
     """Session -- Session Object"""
@@ -104,10 +106,7 @@ class Session(ndb.Model):
     location        = ndb.StringProperty()
     startdatetime   = ndb.DateProperty()
     duration        = ndb.IntegerProperty()    
-    conferenceName  = ndb.StringProperty()
-    def to_JSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__, 
-            sort_keys=True, indent=4)
+    conferenceName  = ndb.StringProperty(required=True)
 
 class SessionForm(messages.Message):
     """SessionForm -- """
@@ -120,6 +119,7 @@ class SessionForm(messages.Message):
     startTime       = messages.StringField(7)
     duration        = messages.IntegerField(8)
     conferenceName  = messages.StringField(9)
+    websafeKey      = messages.StringField(10)
 
 class SessionForms(messages.Message):
     """SessionForms -- multiple Session outbound form message"""
