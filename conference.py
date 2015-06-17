@@ -92,7 +92,18 @@ SESS_SPKR_GET_REQUEST = endpoints.ResourceContainer(
     speaker=messages.StringField(1),
 )
 
+SESS_CONF_SPKR_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+    speaker=messages.StringField(2),
+)
+
 SESS_TYPE_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    type=messages.StringField(1),
+)
+
+SESS_CONF_TYPE_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     websafeConferenceKey=messages.StringField(1),
     type=messages.StringField(2),
@@ -571,6 +582,15 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(SESS_TYPE_GET_REQUEST, SessionForms, path='session/bytype',
+            http_method='GET', name='getSessionsByType')
+    def getSessionsByType(self, request):
+        """ Given a session type, return all sessions given of this type, across all conferences """
+        sessions = Session.query(Session.typeOfSession == request.type)
+        return SessionForms(items=[self._copySessionToForm(sess)\
+            for sess in sessions]
+        )
+
+    @endpoints.method(SESS_CONF_TYPE_GET_REQUEST, SessionForms, path='session/bytypeinconference',
             http_method='GET', name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
         """ Given a conference, return all sessions of a specified type (eg lecture, keynote, workshop) """
@@ -599,6 +619,19 @@ class ConferenceApi(remote.Service):
     def getSessionsBySpeaker(self, request):
         """ Given a speaker, return all sessions given by this particular speaker, across all conferences """
         sessions = Session.query(Session.speaker == request.speaker)
+        return SessionForms(items=[self._copySessionToForm(sess)\
+            for sess in sessions]
+        )
+
+    @endpoints.method(SESS_CONF_SPKR_GET_REQUEST, SessionForms, path='session/byspeakerinconference',
+            http_method='GET', name='getConferenceSessionsBySpeaker')
+    def getConferenceSessionsBySpeaker(self, request):
+        """ Given a speaker, return all sessions given by this particular speaker, across all conferences """
+        conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
+        conf = conf_key.get()
+        if not conf:                                                                                                                                                               raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+        sessions = Session.query(ancestor=conf.key).filter(Session.speaker == request.speaker)
         return SessionForms(items=[self._copySessionToForm(sess)\
             for sess in sessions]
         )
