@@ -16,6 +16,7 @@ import httplib
 import endpoints
 from protorpc import messages
 from google.appengine.ext import ndb
+import json
 
 class Conference(ndb.Model):
     """Conference -- Conference object"""
@@ -104,6 +105,9 @@ class Session(ndb.Model):
     startdatetime   = ndb.DateProperty()
     duration        = ndb.IntegerProperty()    
     conferenceName  = ndb.StringProperty()
+    def to_JSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
 
 class SessionForm(messages.Message):
     """SessionForm -- """
@@ -117,7 +121,7 @@ class SessionForm(messages.Message):
     duration        = messages.IntegerField(8)
     conferenceName  = messages.StringField(9)
 
-class SessionsForm(messages.Message):
+class SessionForms(messages.Message):
     """SessionForms -- multiple Session outbound form message"""
     items = messages.MessageField(SessionForm, 1, repeated=True)
 
