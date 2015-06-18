@@ -27,6 +27,8 @@
                         ng-disabled="loading">Register</a></p>
                 <p><a class="btn btn-primary" ng-show="isUserAttending" ng-click="unregisterFromConference()"
                         ng-disabled="loading">Unregister</a></p>
+                <p><a class="btn btn-primary" href="#/session/create/{{conference.websafeKey}}"
+                        ng-disabled="loading">Create Session</a></p>
             </div>
 
             <form class="form" novalidate role="form">

@@ -240,6 +240,121 @@ conferenceApp.controllers.controller('CreateConferenceCtrl',
                     });
                 });
         };
+
+    });
+
+/**
+ * @ngdoc controller
+ * @name CreateConferenceCtrl
+ *
+ * @description
+ * A controller used for the Create conferences page.
+ */
+conferenceApp.controllers.controller('CreateSessionCtrl',
+    function ($scope, $log, $routeParams, HTTP_ERRORS) {
+
+        /**
+         * The conference object being edited in the page.
+         * @type {{}|*}
+         */
+        $scope.session = $scope.session || {};
+        /**
+         * Holds the default values for the input candidates for topics select.
+         * @type {string[]}
+         */
+        $scope.typeOfSession = [
+            'Seminar',
+            'Workshop'
+        ];
+
+        /**
+         * Tests if the arugment is an integer and not negative.
+         * @returns {boolean} true if the argument is an integer, false otherwise.
+         */
+        $scope.isValidDuration = function () {
+            if (!$scope.session.duration || $scope.session.duration.length === 0) {
+                return true;
+            }
+            return /^[\d]+$/.test($scope.session.duration) && $scope.session.duration >= 0;
+        }
+
+
+        /**
+         * Tests if $scope.session is valid.
+         * @param sessionForm the form object from the create_session.html page.
+         * @returns {boolean|*} true if valid, false otherwise.
+         */
+        $scope.isValidSession = function () {
+            return !sessionForm.$invalid &&
+                $scope.isValidDuration();
+        }        
+
+        $scope.init = function () {
+            $scope.loading = true;
+            console.log("initializing session creation with conference: ");
+            gapi.client.conference.getConference({
+                websafeConferenceKey: $routeParams.websafeConferenceKey
+            }).execute(function (resp) {
+                $scope.$apply(function () {
+                    $scope.loading = false;
+                    if (resp.error) {
+                        // The request has failed.
+                        var errorMessage = resp.error.message || '';
+                        $scope.messages = 'Failed to get the conference : ' + $routeParams.websafeKey
+                            + ' ' + errorMessage;
+                        $scope.alertStatus = 'warning';
+                        $log.error($scope.messages);
+                    } else {
+                        // The request has succeeded.
+                        $scope.alertStatus = 'success';
+                        $scope.conference = resp.result;
+                        $scope.session.conferenceName = resp.result.name;
+                        console.log("initialized session with conference: " + resp.result.name);
+                    }
+                });
+            });
+
+            $scope.loading = true;
+        };
+
+        /**
+         * Invokes the conference.createSession API.
+         *
+         * @param sessionForm the form object.
+         */
+        $scope.createSession = function () {
+            if (!$scope.isValidSession(sessionForm)) {
+                return;
+            }
+
+            $scope.loading = true;
+            gapi.client.conference.createSession($scope.session).
+                execute(function (resp) {
+                    $scope.$apply(function () {
+                        $scope.loading = false;
+                        if (resp.error) {
+                            // The request has failed.
+                            var errorMessage = resp.error.message || '';
+                            $scope.messages = 'Failed to create a session : ' + errorMessage;
+                            $scope.alertStatus = 'warning';
+                            $log.error($scope.messages + ' Session : ' + JSON.stringify($scope.session));
+
+                            if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+                                oauth2Provider.showLoginModal();
+                                return;
+                            }
+                        } else {
+                            // The request has succeeded.
+                            $scope.messages = 'The session has been created : ' + resp.result.name;
+                            $scope.alertStatus = 'success';
+                            $scope.submitted = false;
+                            $scope.session = {};
+                            $log.info($scope.messages + ' : ' + JSON.stringify(resp.result));
+                        }
+                    });
+                });
+        };
+        $scope.init();
     });
 
 /**
