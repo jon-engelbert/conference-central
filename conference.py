@@ -41,6 +41,8 @@ from models import ConflictException
 from models import Session
 from models import SessionForm
 from models import SessionForms
+from models import SessionQueryForm
+from models import SessionQueryForms
 
 from utils import getUserId
 import json
@@ -85,6 +87,12 @@ CONF_GET_REQUEST = endpoints.ResourceContainer(
 CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
+)
+
+SESS_QUERY_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+    queries = messages.MessageField(SessionQueryForms, 2)
 )
 
 SESS_SPKR_GET_REQUEST = endpoints.ResourceContainer(
@@ -369,6 +377,27 @@ class ConferenceApi(remote.Service):
         sf.check_initialized()
         return sf
 
+    def _getSessionQuery(self, q, request):
+        """Return formatted query from the submitted filters."""
+        print("in _getSessionQuery")
+        inequality_filter, filters = self._formatFilters(request.filters)
+        print("done with _formatFilters")
+
+        # If exists, sort on inequality filter first
+        if not inequality_filter:
+            q = q.order(Conference.name)
+        else:
+            q = q.order(ndb.GenericProperty(inequality_filter))
+            q = q.order(Conference.name)
+        print("done with q.order")
+
+        for filtr in filters:
+            if filtr["field"] in ["duration"]:
+                filtr["value"] = int(filtr["value"])
+            formatted_query = ndb.query.FilterNode(filtr["field"], filtr["operator"], filtr["value"])
+            q = q.filter(formatted_query)
+        return q
+
     def _getQuery(self, request):
         """Return formatted query from the submitted filters."""
         q = Conference.query()
@@ -391,6 +420,7 @@ class ConferenceApi(remote.Service):
 
     def _formatFilters(self, filters):
         """Parse, check validity and format user supplied filters."""
+        print("in _formatFilters")
         formatted_filters = []
         inequality_field = None
 
@@ -415,6 +445,7 @@ class ConferenceApi(remote.Service):
 
             formatted_filters.append(filtr)
         return (inequality_field, formatted_filters)
+
 
     @ndb.transactional()
     def _updateConferenceObject(self, request):
@@ -544,27 +575,26 @@ class ConferenceApi(remote.Service):
     #             'No conference found with key: %s' % request.websafeConferenceKey)
     #     prof = conf.key.parent().get()
 
-    @endpoints.method(SESS_CONF_GET_REQUEST, SessionForms, path='session/{websafeConferenceKey}',
+    @endpoints.method(SessionQueryForms, SessionForms, path='session/{websafeConferenceKey}',
             http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """ Given a conference, return all sessions """
         print("in getConferenceSessions")
         print("request: {}", repr(request))
-        print("request.websafeConferenceKey: {}", repr(request.websafeConferenceKey))
-        # conf_name = request.websafeConferenceKey
-        # print("conf_name: {}", conf_name)
-        # q = Conference.query()
-        # q= q.filter(Conference.name == request.websafeConferenceKey)
-        # conf = q.get()
+        # print("request.websafeConferenceKey: {}", repr(request.websafeConferenceKey))
+
 
         conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
         conf = conf_key.get()
         print("conf: {}", repr(conf))
         if not conf:                                                                                                                                                               raise endpoints.NotFoundException(
             'No conference found with key: %s' % request.websafeConferenceKey)
-        sessions = Session.query(ancestor=conf.key)
+        sessionsQuery = Session.query(ancestor=conf.key)
+        print("request.queries: {}", repr(request.filters))
         # sessions = Session.query(ancestor=ndb.Key(urlsafe=request.websafeConferenceKey))
-        session = sessions.get()
+        if request.filters:
+            sessionsQuery = self._getSessionQuery(sessionsQuery, request.filters) 
+        session = sessionsQuery.get()
         print("session: {}", session)
         # response = SESS_CONF_RESPONSE()
         # # print("session dict: {}", session.to_JSON())
@@ -578,7 +608,7 @@ class ConferenceApi(remote.Service):
 
         # return set of ConferenceForm objects per Conference
         return SessionForms(items=[self._copySessionToForm(sess)\
-            for sess in sessions]
+            for sess in sessionsQuery]
         )
 
 
