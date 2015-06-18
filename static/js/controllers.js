@@ -657,6 +657,302 @@ conferenceApp.controllers.controller('ShowConferenceCtrl', function ($scope, $lo
 
 /**
  * @ngdoc controller
+ * @name ShowSessionCtrl
+ *
+ * @description
+ * A controller used for the Show sessions page.
+ */
+conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, $routeParams, HTTP_ERRORS) {
+
+    /**
+     * Holds the status if the query is being executed.
+     * @type {boolean}
+     */
+    $scope.submitted = false;
+
+    $scope.selectedTab = 'ALL';
+
+    /**
+     * Holds the filters that will be applied when querySessionsAll is invoked.
+     * @type {Array}
+     */
+    $scope.filters = [
+    ];
+
+    $scope.filtereableFields = [
+        {enumValue: 'TYPE', displayName: 'Type'},
+        {enumValue: 'SPEAKER', displayName: 'Speaker'}
+    ]
+
+    /**
+     * Possible operators.
+     *
+     * @type {{displayName: string, enumValue: string}[]}
+     */
+    $scope.operators = [
+        {displayName: '=', enumValue: 'EQ'},
+        {displayName: '>', enumValue: 'GT'},
+        {displayName: '>=', enumValue: 'GTEQ'},
+        {displayName: '<', enumValue: 'LT'},
+        {displayName: '<=', enumValue: 'LTEQ'},
+        {displayName: '!=', enumValue: 'NE'}
+    ];
+
+    /**
+     * Holds the conferences currently displayed in the page.
+     * @type {Array}
+     */
+    $scope.sessions = [];
+
+    /**
+     * Holds the state if offcanvas is enabled.
+     *
+     * @type {boolean}
+     */
+    $scope.isOffcanvasEnabled = false;
+
+    /**
+     * Sets the selected tab to 'ALL'
+     */
+    $scope.tabAllSelected = function () {
+        $scope.selectedTab = 'ALL';
+        $scope.querySessions();
+    };
+
+    /**
+     * Sets the selected tab to 'YOU_HAVE_CREATED'
+     */
+    $scope.tabYouHaveCreatedSelected = function () {
+        $scope.selectedTab = 'YOU_HAVE_CREATED';
+        if (!oauth2Provider.signedIn) {
+            oauth2Provider.showLoginModal();
+            return;
+        }
+        $scope.querySessions();
+    };
+
+    /**
+     * Sets the selected tab to 'YOU_WILL_ATTEND'
+     */
+    $scope.tabYouWillAttendSelected = function () {
+        $scope.selectedTab = 'YOU_WILL_ATTEND';
+        if (!oauth2Provider.signedIn) {
+            oauth2Provider.showLoginModal();
+            return;
+        }
+        $scope.querySessions();
+    };
+
+    /**
+     * Toggles the status of the offcanvas.
+     */
+    $scope.toggleOffcanvas = function () {
+        $scope.isOffcanvasEnabled = !$scope.isOffcanvasEnabled;
+    };
+
+    /**
+     * Namespace for the pagination.
+     * @type {{}|*}
+     */
+    $scope.pagination = $scope.pagination || {};
+    $scope.pagination.currentPage = 0;
+    $scope.pagination.pageSize = 20;
+    /**
+     * Returns the number of the pages in the pagination.
+     *
+     * @returns {number}
+     */
+    $scope.pagination.numberOfPages = function () {
+        return Math.ceil($scope.sessions.length / $scope.pagination.pageSize);
+    };
+
+    /**
+     * Returns an array including the numbers from 1 to the number of the pages.
+     *
+     * @returns {Array}
+     */
+    $scope.pagination.pageArray = function () {
+        var pages = [];
+        var numberOfPages = $scope.pagination.numberOfPages();
+        for (var i = 0; i < numberOfPages; i++) {
+            pages.push(i);
+        }
+        return pages;
+    };
+
+    /**
+     * Checks if the target element that invokes the click event has the "disabled" class.
+     *
+     * @param event the click event
+     * @returns {boolean} if the target element that has been clicked has the "disabled" class.
+     */
+    $scope.pagination.isDisabled = function (event) {
+        return angular.element(event.target).hasClass('disabled');
+    }
+
+    /**
+     * Adds a filter and set the default value.
+     */
+    $scope.addFilter = function () {
+        $scope.filters.push({
+            field: $scope.filtereableFields[0],
+            operator: $scope.operators[0],
+            value: ''
+        })
+    };
+
+    /**
+     * Clears all filters.
+     */
+    $scope.clearFilters = function () {
+        $scope.filters = [];
+    };
+
+    /**
+     * Removes the filter specified by the index from $scope.filters.
+     *
+     * @param index
+     */
+    $scope.removeFilter = function (index) {
+        if ($scope.filters[index]) {
+            $scope.filters.splice(index, 1);
+        }
+    };
+
+    /**
+     * Query the conferences depending on the tab currently selected.
+     *
+     */
+    $scope.querySessions = function () {
+        $scope.submitted = false;
+        if ($scope.selectedTab == 'ALL') {
+            $scope.querySessionsAll();
+        } else if ($scope.selectedTab == 'YOU_HAVE_CREATED') {
+            $scope.getSessionsCreated();
+        } else if ($scope.selectedTab == 'YOU_WILL_ATTEND') {
+            $scope.getSessionsAttend();
+        }
+    };
+
+    /**
+     * Invokes the session.querySessions API.
+     */
+    $scope.querySessionsAll = function () {
+        var sendFilters = {
+            filters: []
+        }
+        for (var i = 0; i < $scope.filters.length; i++) {
+            var filter = $scope.filters[i];
+            if (filter.field && filter.operator && filter.value) {
+                sendFilters.filters.push({
+                    field: filter.field.enumValue,
+                    operator: filter.operator.enumValue,
+                    value: filter.value
+                });
+            }
+        }
+        $scope.loading = true;
+        gapi.client.conference.getConferenceSessions({websafeConferenceKey: $routeParams.websafeConferenceKey}).
+            execute(function (resp) {
+                $scope.$apply(function () {
+                    $scope.loading = false;
+                    if (resp.error) {
+                        // The request has failed.
+                        var errorMessage = resp.error.message || '';
+                        $scope.messages = 'Failed to query sessions : ' + errorMessage;
+                        $scope.alertStatus = 'warning';
+                        $log.error($scope.messages + ' filters : ' + JSON.stringify(sendFilters));
+                    } else {
+                        // The request has succeeded.
+                        $scope.submitted = false;
+                        $scope.messages = 'Query succeeded : ' + JSON.stringify(sendFilters);
+                        $scope.alertStatus = 'success';
+                        $log.info($scope.messages);
+
+                        $scope.sessions = [];
+                        angular.forEach(resp.items, function (session) {
+                            $scope.sessions.push(session);
+                        });
+                    }
+                    $scope.submitted = true;
+                });
+            });
+    }
+
+    /**
+     * Invokes the session.getSessionsCreated method.
+     */
+    $scope.getSessionsCreated = function () {
+        $scope.loading = true;
+        gapi.client.session.getSessionsCreated().
+            execute(function (resp) {
+                $scope.$apply(function () {
+                    $scope.loading = false;
+                    if (resp.error) {
+                        // The request has failed.
+                        var errorMessage = resp.error.message || '';
+                        $scope.messages = 'Failed to query the sessions created : ' + errorMessage;
+                        $scope.alertStatus = 'warning';
+                        $log.error($scope.messages);
+
+                        if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+                            oauth2Provider.showLoginModal();
+                            return;
+                        }
+                    } else {
+                        // The request has succeeded.
+                        $scope.submitted = false;
+                        $scope.messages = 'Query succeeded : Sessions you have created';
+                        $scope.alertStatus = 'success';
+                        $log.info($scope.messages);
+
+                        $scope.sessions = [];
+                        angular.forEach(resp.items, function (session) {
+                            $scope.sessions.push(session);
+                        });
+                    }
+                    $scope.submitted = true;
+                });
+            });
+    };
+
+    /**
+     * Retrieves the sessions to attend by calling the session.getProfile method and
+     * invokes the session.getSession method n times where n == the number of the sessions to attend.
+     */
+    $scope.getSessionsAttend = function () {
+        $scope.loading = true;
+        gapi.client.session.getSessionsToAttend().
+            execute(function (resp) {
+                $scope.$apply(function () {
+                    if (resp.error) {
+                        // The request has failed.
+                        var errorMessage = resp.error.message || '';
+                        $scope.messages = 'Failed to query the sessions to attend : ' + errorMessage;
+                        $scope.alertStatus = 'warning';
+                        $log.error($scope.messages);
+
+                        if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+                            oauth2Provider.showLoginModal();
+                            return;
+                        }
+                    } else {
+                        // The request has succeeded.
+                        $scope.sessions = resp.result.items;
+                        $scope.loading = false;
+                        $scope.messages = 'Query succeeded : Sessions you will attend (or you have attended)';
+                        $scope.alertStatus = 'success';
+                        $log.info($scope.messages);
+                    }
+                    $scope.submitted = true;
+                });
+            });
+    };
+});
+
+
+/**
+ * @ngdoc controller
  * @name ConferenceDetailCtrl
  *
  * @description

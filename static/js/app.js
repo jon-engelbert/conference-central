@@ -28,6 +28,10 @@ var app = angular.module('conferenceApp',
                     templateUrl: '/partials/create_session.html',
                     controller: 'CreateSessionCtrl'
                 }).
+                when('/session/:websafeConferenceKey', {
+                    templateUrl: '/partials/show_sessions.html',
+                    controller: 'ShowSessionCtrl'
+                }).
                 when('/conference/detail/:websafeConferenceKey', {
                     templateUrl: '/partials/conference_detail.html',
                     controller: 'ConferenceDetailCtrl'
