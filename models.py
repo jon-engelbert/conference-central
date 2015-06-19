@@ -133,8 +133,8 @@ class SessionQueryForm(messages.Message):
 
 class SessionQueryForms(messages.Message):
     """SessionQueryForms -- multiple SessionQueryForm inbound form message"""
-    websafeConferenceKey=messages.StringField(1)
-    filters = messages.MessageField(SessionQueryForm, 2, repeated=True)
+    # websafeConferenceKey=messages.StringField(1)
+    filters = messages.MessageField(SessionQueryForm, 1, repeated=True)
 
 
 

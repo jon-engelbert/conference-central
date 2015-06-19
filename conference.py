@@ -78,6 +78,11 @@ FIELDS =    {
             'MAX_ATTENDEES': 'maxAttendees',
             }
 
+SESSION_FIELDS =    {
+            'SPEAKER': 'speaker',
+            'TYPE': 'typeOfSession',
+            }
+
 
 CONF_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
@@ -377,11 +382,9 @@ class ConferenceApi(remote.Service):
         sf.check_initialized()
         return sf
 
-    def _getSessionQuery(self, q, request):
+    def _getSessionQuery(self, q, inequality_filter, filters):
         """Return formatted query from the submitted filters."""
         print("in _getSessionQuery")
-        inequality_filter, filters = self._formatFilters(request.filters)
-        print("done with _formatFilters")
 
         # If exists, sort on inequality filter first
         if not inequality_filter:
@@ -426,6 +429,7 @@ class ConferenceApi(remote.Service):
 
         for f in filters:
             filtr = {field.name: getattr(f, field.name) for field in f.all_fields()}
+            print("about to get field and operator")
 
             try:
                 filtr["field"] = FIELDS[filtr["field"]]
@@ -434,6 +438,40 @@ class ConferenceApi(remote.Service):
                 raise endpoints.BadRequestException("Filter contains invalid field or operator.")
 
             # Every operation except "=" is an inequality
+            print("about to check operator")
+            if filtr["operator"] != "=":
+                # check if inequality operation has been used in previous filters
+                # disallow the filter if inequality was performed on a different field before
+                # track the field on which the inequality operation is performed
+                if inequality_field and inequality_field != filtr["field"]:
+                    raise endpoints.BadRequestException("Inequality filter is allowed on only one field.")
+                else:
+                    inequality_field = filtr["field"]
+
+            formatted_filters.append(filtr)
+        return (inequality_field, formatted_filters)
+
+    def _formatFiltersSession(self, filters):
+        """Parse, check validity and format user supplied filters."""
+        print("in _formatFiltersSession")
+        formatted_filters = []
+        inequality_field = None
+
+        for f in filters:
+            print("filter f: {}", repr(f))
+            filtr = {field.name: getattr(f, field.name) for field in f.all_fields()}
+            print("about to get field and operator")
+            print("field: {}", filtr["field"])
+            try:
+                if (filtr["field"] != "websafeConferenceKey"):
+                    print("field translated: {}", SESSION_FIELDS[filtr["field"]])
+                    filtr["field"] = SESSION_FIELDS[filtr["field"]]
+                filtr["operator"] = OPERATORS[filtr["operator"]]
+            except KeyError:
+                raise endpoints.BadRequestException("Filter contains invalid field or operator.")
+
+            # Every operation except "=" is an inequality
+            print("about to check operator")
             if filtr["operator"] != "=":
                 # check if inequality operation has been used in previous filters
                 # disallow the filter if inequality was performed on a different field before
@@ -487,6 +525,12 @@ class ConferenceApi(remote.Service):
         return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
 
 
+    @endpoints.method(CONF_GET_REQUEST, ConferenceForm, path='conference',
+            http_method='DELETE', name='deleteConference')
+    def deleteConference(self, request):
+        """Delete new conference."""
+        return self._deleteConferenceObject(request)
+
     @endpoints.method(ConferenceForm, ConferenceForm, path='conference',
             http_method='POST', name='createConference')
     def createConference(self, request):
@@ -504,6 +548,7 @@ class ConferenceApi(remote.Service):
             path='queryConferences', http_method='POST', name='queryConferences')
     def queryConferences(self, request):
         """Query for conferences."""
+        print("request: {}", repr(request))
         conferences = self._getQuery(request)
 
          # return individual ConferenceForm object per Conference
@@ -575,26 +620,32 @@ class ConferenceApi(remote.Service):
     #             'No conference found with key: %s' % request.websafeConferenceKey)
     #     prof = conf.key.parent().get()
 
-    @endpoints.method(SessionQueryForms, SessionForms, path='session/{websafeConferenceKey}',
-            http_method='GET', name='getConferenceSessions')
+    @endpoints.method(SessionQueryForms, SessionForms, path='getConferenceSessions',
+            http_method='POST', name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """ Given a conference, return all sessions """
         print("in getConferenceSessions")
         print("request: {}", repr(request))
         # print("request.websafeConferenceKey: {}", repr(request.websafeConferenceKey))
 
+        inequality_filter, filters = self._formatFiltersSession(request.filters)
+        print("filters: {}", repr(filters))
 
-        conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
+        conf_key = ndb.Key(urlsafe= filters[0]["value"])
+        # conf_key = ndb.Key(urlsafe= request.websafeConferenceKey)
         conf = conf_key.get()
         print("conf: {}", repr(conf))
         if not conf:                                                                                                                                                               raise endpoints.NotFoundException(
-            'No conference found with key: %s' % request.websafeConferenceKey)
+            'No conference found with key: %s' % filters[0]["value"])
+        filters.pop(0)
+            # 'No conference found with key: %s' % request.websafeConferenceKey)
         sessionsQuery = Session.query(ancestor=conf.key)
-        print("request.queries: {}", repr(request.filters))
+        print("request.filters: {}", repr(request.filters))
         # sessions = Session.query(ancestor=ndb.Key(urlsafe=request.websafeConferenceKey))
-        if request.filters:
-            sessionsQuery = self._getSessionQuery(sessionsQuery, request.filters) 
-        session = sessionsQuery.get()
+        if filters:
+            sessionsQuery = self._getSessionQuery(sessionsQuery, inequality_filter, filters) 
+        if sessionsQuery:
+            session = sessionsQuery.get()
         print("session: {}", session)
         # response = SESS_CONF_RESPONSE()
         # # print("session dict: {}", session.to_JSON())

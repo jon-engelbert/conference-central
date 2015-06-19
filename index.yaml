@@ -99,3 +99,35 @@ indexes:
   properties:
   - name: topics
   - name: name
+
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: speaker
+  - name: name
+
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: speaker
+  - name: typeOfSession
+  - name: name
+
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: speaker
+  - name: websafeConferenceKey
+  - name: name
+
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: typeOfSession
+  - name: name
+
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: websafeConferenceKey
+  - name: name

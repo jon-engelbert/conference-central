@@ -841,11 +841,11 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
         var sendFilters = {
             filters: []
         }
-        // sendFilters.filters.push({
-        //     field: "websafeConferenceKey",
-        //     operator: "=",
-        //     value: $routeParams.websafeConferenceKey
-        // });
+        sendFilters.filters.push({
+            field: "websafeConferenceKey",
+            operator: "EQ",
+            value: $routeParams.websafeConferenceKey
+        });
         for (var i = 0; i < $scope.filters.length; i++) {
             var filter = $scope.filters[i];
             if (filter.field && filter.operator && filter.value) {
@@ -858,7 +858,8 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
         }
         $scope.loading = true;
 
-        gapi.client.conference.getConferenceSessions({websafeConferenceKey: $routeParams.websafeConferenceKey, queries: sendFilters}).
+        // gapi.client.conference.getConferenceSessions({websafeConferenceKey: $routeParams.websafeConferenceKey, filters: sendFilters}).
+        gapi.client.conference.getConferenceSessions(sendFilters).
             execute(function (resp) {
                 $scope.$apply(function () {
                     $scope.loading = false;
