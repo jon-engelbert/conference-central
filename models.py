@@ -120,6 +120,7 @@ class SessionForm(messages.Message):
     duration        = messages.IntegerField(8)
     conferenceName  = messages.StringField(9)
     websafeKey      = messages.StringField(10)
+    isWishlist      = messages.BooleanField(11)
 
 class SessionForms(messages.Message):
     """SessionForms -- multiple Session outbound form message"""

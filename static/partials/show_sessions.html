@@ -18,7 +18,7 @@
 
     <tabset id="show-sessions-tab" justified="true">
         <tab select="tabAllSelected()" heading="All"></tab>
-        <tab select="tabYouWillAttendSelected()" heading="Your wishlist"></tab>
+        <tab select="tabYourWishlist()" heading="Your wishlist"></tab>
     </tabset>
 
     <div class="row row-offcanvas row-offcanvas-right" ng-class="{active: isOffcanvasEnabled}">
@@ -62,6 +62,11 @@
                         <td>{{session.date | date:'dd-MMMM-yyyy'}}</td>
                         <td>{{session.speaker}}</td>
                         <td>{{session.duration}}</td>
+                        <!-- $scope.websafeSessionKey = session.websafeSessionKey -->
+                        <td><a class="btn btn-primary" ng-hide="session.isWishlist" ng-click="addSessionToWishlist(session.websafeKey);"
+                                ng-disabled="loading">Add To Wishlist</a></td>
+                        <td><a class="btn btn-primary" ng-show="session.isWishlist" ng-click="removeSessionFromWishlist(session.websafeKey)"
+                                ng-disabled="loading">Remove From Wishlist</a></td>
                     </tr>
                     </tbody>
                 </table>

@@ -662,7 +662,7 @@ conferenceApp.controllers.controller('ShowConferenceCtrl', function ($scope, $lo
  * @description
  * A controller used for the Show sessions page.
  */
-conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, $routeParams, HTTP_ERRORS) {
+conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, $routeParams, oauth2Provider, HTTP_ERRORS) {
 
     /**
      * Holds the status if the query is being executed.
@@ -703,6 +703,7 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
      * @type {Array}
      */
     $scope.sessions = [];
+    $scope.isSessionWish = [];
 
     /**
      * Holds the state if offcanvas is enabled.
@@ -719,23 +720,12 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
         $scope.querySessions();
     };
 
-    /**
-     * Sets the selected tab to 'YOU_HAVE_CREATED'
-     */
-    $scope.tabYouHaveCreatedSelected = function () {
-        $scope.selectedTab = 'YOU_HAVE_CREATED';
-        if (!oauth2Provider.signedIn) {
-            oauth2Provider.showLoginModal();
-            return;
-        }
-        $scope.querySessions();
-    };
 
     /**
      * Sets the selected tab to 'YOU_WILL_ATTEND'
      */
-    $scope.tabYouWillAttendSelected = function () {
-        $scope.selectedTab = 'YOU_WILL_ATTEND';
+    $scope.tabYourWishlist = function () {
+        $scope.selectedTab = 'YOUR_WISHLIST';
         if (!oauth2Provider.signedIn) {
             oauth2Provider.showLoginModal();
             return;
@@ -825,12 +815,12 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
      */
     $scope.querySessions = function () {
         $scope.submitted = false;
+        $log.info("in $scope.querySessions");
+        $log.info($scope.selectedTab);
         if ($scope.selectedTab == 'ALL') {
             $scope.querySessionsAll();
-        } else if ($scope.selectedTab == 'YOU_HAVE_CREATED') {
-            $scope.getSessionsCreated();
-        } else if ($scope.selectedTab == 'YOU_WILL_ATTEND') {
-            $scope.getSessionsAttend();
+        } else if ($scope.selectedTab == 'YOUR_WISHLIST') {
+            $scope.getSessionsWishlist();
         }
     };
 
@@ -879,6 +869,7 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
                         $scope.sessions = [];
                         angular.forEach(resp.items, function (session) {
                             $scope.sessions.push(session);
+                            $scope.isSessionWish = false;
                         });
                     }
                     $scope.submitted = true;
@@ -887,51 +878,16 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
     }
 
     /**
-     * Invokes the session.getSessionsCreated method.
-     */
-    $scope.getSessionsCreated = function () {
-        $scope.loading = true;
-        gapi.client.session.getSessionsCreated().
-            execute(function (resp) {
-                $scope.$apply(function () {
-                    $scope.loading = false;
-                    if (resp.error) {
-                        // The request has failed.
-                        var errorMessage = resp.error.message || '';
-                        $scope.messages = 'Failed to query the sessions created : ' + errorMessage;
-                        $scope.alertStatus = 'warning';
-                        $log.error($scope.messages);
-
-                        if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
-                            oauth2Provider.showLoginModal();
-                            return;
-                        }
-                    } else {
-                        // The request has succeeded.
-                        $scope.submitted = false;
-                        $scope.messages = 'Query succeeded : Sessions you have created';
-                        $scope.alertStatus = 'success';
-                        $log.info($scope.messages);
-
-                        $scope.sessions = [];
-                        angular.forEach(resp.items, function (session) {
-                            $scope.sessions.push(session);
-                        });
-                    }
-                    $scope.submitted = true;
-                });
-            });
-    };
-
-    /**
      * Retrieves the sessions to attend by calling the session.getProfile method and
      * invokes the session.getSession method n times where n == the number of the sessions to attend.
      */
-    $scope.getSessionsAttend = function () {
+    $scope.getSessionsWishlist = function () {
         $scope.loading = true;
-        gapi.client.session.getSessionsToAttend().
+        $log.info("in getSessionsWishlist")
+        gapi.client.conference.getSessionsInWishlist().
             execute(function (resp) {
                 $scope.$apply(function () {
+                    $scope.loading = false;
                     if (resp.error) {
                         // The request has failed.
                         var errorMessage = resp.error.message || '';
@@ -945,15 +901,129 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
                         }
                     } else {
                         // The request has succeeded.
-                        $scope.sessions = resp.result.items;
+                        $scope.sessions = resp.result;
                         $scope.loading = false;
-                        $scope.messages = 'Query succeeded : Sessions you will attend (or you have attended)';
+                        
+                        $scope.messages = 'Query succeeded : Sessions you will attend (or you have attended)'+ JSON.stringify(resp.items);
                         $scope.alertStatus = 'success';
                         $log.info($scope.messages);
+                        $scope.sessions = [];
+                        angular.forEach(resp.items, function (session) {
+                            $scope.sessions.push(session);
+                        });
                     }
                     $scope.submitted = true;
                 });
             });
+    };
+    // $scope.isUserWishing = function (websafeSessionKey) {
+    //     $scope.loading = true;
+    //     $log.info("in $scope.isUserWishing, key: " + websafeSessionKey)
+        // gapi.client.conference.isUserWishing({
+        //     websafeSessionKey: websafeSessionKey
+        // }).execute(function (resp) {
+        //     $scope.$apply(function () {
+        //         $scope.loading = false;
+        //         if (resp.error) {
+        //             // The request has failed.
+        //             var errorMessage = resp.error.message || '';
+        //             $scope.messages = 'isUserWishing failed : ' + errorMessage;
+        //             $scope.alertStatus = 'warning';
+        //             $log.error($scope.messages);
+
+        //             if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+        //                 oauth2Provider.showLoginModal();
+        //                 return false;
+        //             }
+        //         } else {
+        //             if (resp.result) {
+        //                 // Register succeeded.
+        //                 $scope.messages = 'isUserWishing succeeded';
+        //                 $scope.alertStatus = 'success';
+        //                 return resp.result;
+        //             } else {
+        //                 $scope.messages = 'isUserWishing failed';
+        //                 $scope.alertStatus = 'warning';
+        //                 return false;
+        //             }
+        //         }
+        //     });
+        // });
+    // };
+
+    /**
+     * Invokes the conference.addSessionToWishlist method.
+     */
+    $scope.addSessionToWishlist = function (websafeSessionKey) {
+        $scope.loading = true;
+        $log.info("in $scope.addSessionToWishlist, key: " + websafeSessionKey)
+        gapi.client.conference.addSessionToWishlist({
+            websafeSessionKey: websafeSessionKey
+        }).execute(function (resp) {
+            $scope.$apply(function () {
+                $scope.loading = false;
+                if (resp.error) {
+                    // The request has failed.
+                    var errorMessage = resp.error.message || '';
+                    $scope.messages = 'Failed to add session to wishlist : ' + errorMessage;
+                    $scope.alertStatus = 'warning';
+                    $log.error($scope.messages);
+
+                    if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+                        oauth2Provider.showLoginModal();
+                        return;
+                    }
+                } else {
+                    if (resp.result) {
+                        // Register succeeded.
+                        $scope.messages = 'Added session to wishlist';
+                        $scope.alertStatus = 'success';
+                    } else {
+                        $scope.messages = 'Failed to add session to wishlist';
+                        $scope.alertStatus = 'warning';
+                    }
+                }
+            });
+        });
+    };
+
+    /**
+     * Invokes the conference.removeSessionFromWishlist method.
+     */
+    $scope.removeSessionFromWishlist = function (websafeSessionKey) {
+        $scope.loading = true;
+        $log.info("in $scope.removeSessionFromWishlist: " + websafeSessionKey)
+        gapi.client.conference.removeSessionFromWishlist({
+            websafeSessionKey: websafeSessionKey
+        }).execute(function (resp) {
+            $scope.$apply(function () {
+                $scope.loading = false;
+                if (resp.error) {
+                    // The request has failed.
+                    var errorMessage = resp.error.message || '';
+                    $scope.messages = 'Failed to remove session from the user wishlist : ' + errorMessage;
+                    $scope.alertStatus = 'warning';
+                    $log.error($scope.messages);
+                    if (resp.code && resp.code == HTTP_ERRORS.UNAUTHORIZED) {
+                        oauth2Provider.showLoginModal();
+                        return;
+                    }
+                } else {
+                    if (resp.result) {
+                        // Unregister succeeded.
+                        $scope.messages = 'Removed session from user wishlist';
+                        $scope.alertStatus = 'success';
+                        $log.info($scope.messages);
+                    } else {
+                        var errorMessage = resp.error.message || '';
+                        $scope.messages = 'Failed to remove session from user wishlist : ' + websafeSessionKey +
+                            ' : ' + errorMessage;
+                        $scope.alertStatus = 'warning';
+                        $log.error($scope.messages);
+                    }
+                }
+            });
+        });
     };
 });
 
