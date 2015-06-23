@@ -978,6 +978,12 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
                         // Register succeeded.
                         $scope.messages = 'Added session to wishlist';
                         $scope.alertStatus = 'success';
+                        var sessionIndex = 0;
+                        for (var i = 0; i < $scope.sessions.size; i++) {
+                            if ($scope.sessions[i].websafeKey == websafeSessionKey)
+                                sessionIndex = i;
+                        }
+                        $scope.sessions[sessionIndex].isWishlist = true;
                     } else {
                         $scope.messages = 'Failed to add session to wishlist';
                         $scope.alertStatus = 'warning';
@@ -1013,6 +1019,12 @@ conferenceApp.controllers.controller('ShowSessionCtrl', function ($scope, $log, 
                         // Unregister succeeded.
                         $scope.messages = 'Removed session from user wishlist';
                         $scope.alertStatus = 'success';
+                        var sessionIndex = 0;
+                        for (var i = 0; i < $scope.sessions.size; i++) {
+                            if ($scope.sessions[i].websafeKey == websafeSessionKey)
+                                sessionIndex = i;
+                        }
+                        $scope.sessions[sessionIndex].isWishlist = false;
                         $log.info($scope.messages);
                     } else {
                         var errorMessage = resp.error.message || '';
